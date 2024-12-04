@@ -12,6 +12,7 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
+let assignments = [];
 
 // 하드코딩된 현재 주차와 데드라인
 let weekNumber = '14';
@@ -30,10 +31,13 @@ async function getDetailedCourse(browser, courseName, username) {
     await page.goto('https://learn.hansung.ac.kr');
 
     await page.evaluate((courseName) => {
-      const courseElements = Array.from(document.querySelectorAll('.course-title'));
-      const courseElement = courseElements.find(el => el.innerText.includes(courseName));
-      if (courseElement) {
-        courseElement.click();
+      const courseElements = Array.from(document.querySelectorAll('.course-title h3'));
+      const matchingCourse = courseElements.find(element => element.textContent.trim().includes(courseName));
+        
+      if (matchingCourse) {
+          matchingCourse.click(); // 일치하는 코스 요소 클릭
+      } else {
+          console.log(`No course found containing: ${courseName}`);
       }
     }, courseName);
 
@@ -47,6 +51,8 @@ async function getDetailedCourse(browser, courseName, username) {
     });
 
     await page.waitForNavigation();
+
+    console.log(`Lecture page ${courseName} loaded`, page.url());
 
     // 첫 번째 스크래핑 작업
 
@@ -69,40 +75,48 @@ async function getDetailedCourse(browser, courseName, username) {
 
 
     // '과제' 텍스트를 가진 <a> 요소를 클릭
-    await page.evaluate(() => {
+    const linkFound = await page.evaluate(() => {
       const assignmentLink = Array.from(document.querySelectorAll('ul.add_activities li a'))
         .find(link => link.textContent.trim() === '과제');
       if (assignmentLink) {
         assignmentLink.click();
+        return true;
+      } else {
+        console.log('Assignment link not found');
+        return false;
       }
     });
-
-    // 페이지 이동을 기다림
-    await page.waitForNavigation();
-    console.log('Assignment page loaded', page.url());
-
-    // 두 번째 스크래핑 작업
-    const assignments = await page.evaluate(() => {
-      // Select only <tr> elements with a class attribute,
-      // which includes both `class=""` and other non-empty classes like `class="lastrow"`.
-      const rows = Array.from(document.querySelectorAll('tr[class=""], tr.lastrow'));
-      console.log('Assignment ========================= Rows:', rows);
-      const result = [];
     
-      for (const row of rows) {
-        const cells = Array.from(row.querySelectorAll('td'));
-        const rowData = [];
+    // 페이지 이동을 기다림 링크가 있을 때만 수행
+    if (linkFound) {
+      await page.waitForNavigation();
+      console.log('Assignment page loaded', page.url());
     
-        for (const cell of cells) {
-          const text = cell.textContent.trim();
-          rowData.push(text);
+      // 두 번째 스크래핑 작업
+      assignments = await page.evaluate(() => {
+        const rows = Array.from(document.querySelectorAll('tr[class=""], tr.lastrow'));
+        console.log('Assignment ========================= Rows:', rows);
+        const result = [];
+    
+        for (const row of rows) {
+          const cells = Array.from(row.querySelectorAll('td'));
+          const rowData = [];
+    
+          for (const cell of cells) {
+            const text = cell.textContent.trim();
+            rowData.push(text);
+          }
+    
+          result.push(rowData);
         }
     
-        result.push(rowData);
-      }
+        return result;
+      });
     
-      return result;
-    });
+      // 이후 assignments 사용
+    } else {
+      console.log('Skipping further actions as assignment link was not found.');
+    }
   
     /// 첫 번째, 두 번째 추출 이후 DB(firestore)에 저장하는 과정
     // 1. 강의 정보 저장
@@ -194,7 +208,7 @@ async function getDetailedCourse(browser, courseName, username) {
 
 
 
-    return
+    return;
 
   } catch (error) {
     console.error(`Error processing course ${courseName}`, error);

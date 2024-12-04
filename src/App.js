@@ -22,19 +22,6 @@ const colorPalette = [
   '#f0ffff',
 ];
 
-// 과목 데이터를 순환 색상 배열을 사용하여 설정
-const initialSubjects = [
-  { title: '고급모바일프로그래밍', details: '과제: 4시간 남음' },
-  { title: '웹프레임워크1', details: '영상: 5시간 남음' },
-  { title: 'SW프로그래밍', details: '과제: 1일 2시간 남음' },
-  { title: '시스템프로그래밍', details: '과제: 5일 7시간 남음' },
-  { title: '선형대수', details: '과제: 6일 남음' },
-  { title: '설계패턴', details: '과제: 6일 13시간 남음' },
-].map((subject, index) => ({
-  ...subject,
-  color: colorPalette[index % colorPalette.length], // 색상을 순환하여 할당
-}));
-
 const firebaseConfig = {
   apiKey: "AIzaSyCAtbItawYDII4FhkNRVX90PGYs5OyG2nw",
   authDomain: "hannoti-50b2b.firebaseapp.com",

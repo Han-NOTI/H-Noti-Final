@@ -1,16 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   TextInput,
   Text,
-  StyleSheet,
-  TouchableOpacity,
   Image,
-  Alert,
+  StyleSheet,
+  TouchableOpacity
 } from 'react-native';
-import axios from 'axios';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import Checkbox from 'expo-checkbox';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios'; // Import Axios for HTTP requests
 
 const firebaseConfig = {
   apiKey: "AIzaSyCAtbItawYDII4FhkNRVX90PGYs5OyG2nw",
@@ -22,53 +21,76 @@ const firebaseConfig = {
   measurementId: "G-7CSDGXXJY9"
 };
 
-export default function LoginScreen({ navigation }) {
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-
+const LoginScreen = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Load login data from AsyncStorage
+  useEffect(() => {
+    const loadLoginData = async () => {
+      const savedUsername = await AsyncStorage.getItem('username');
+      const savedPassword = await AsyncStorage.getItem('password');
+      const savedRememberMe = await AsyncStorage.getItem('rememberMe');
+      if (savedRememberMe === 'true') {
+        setUsername(savedUsername || '');
+        setPassword(savedPassword || '');
+        setRememberMe(true);
+      }
+    };
+    loadLoginData();
+  }, []);
+
+  // Handle login
   const handleLogin = async () => {
     try {
-      const response = await axios.post('https://loginwitheclass-bkvxpnghzq-du.a.run.app', {
-        username,
-        password,
-      });
-      const courses = response.data;
-      navigation.navigate('Main', {
-        screen: 'Home',
-        params: { courses },
-      });
-    } catch (err) {
-      console.error('로그인 실패:', err.response?.data || err.message);
-      setError('로그인 실패. 사용자 정보를 확인해주세요.');
+      // Firebase Cloud Functions endpoint 호출
+      const response = await axios.post('https://loginwitheclass-bkvxpnghzq-du.a.run.app', { username, password });
+      console.log("실행결과:", response.data)
+
+
+      if (response.data.success) {
+        if (rememberMe) {
+          await AsyncStorage.setItem('username', username);
+          await AsyncStorage.setItem('password', password);
+          await AsyncStorage.setItem('rememberMe', 'true');
+        } else {
+          await AsyncStorage.removeItem('username');
+          await AsyncStorage.removeItem('password');
+          await AsyncStorage.setItem('rememberMe', 'false');
+        }
+        onLoginSuccess();
+      } else {
+        setError(response.data.message || 'Unexpected error occurred. Please try again.');
+        setPassword('');
+      }
+    } catch (error) {
+      console.log(error);
+      setError('Unexpected error occurred. Please try again.');
+      setPassword('');
     }
   };
 
-  return (
-    <View style={styles.container}>
-      {/* 로고 */}
-      <Image source={require('../assets/logo.png')} style={styles.logo} />
 
-      {/* 사용자 입력 */}
+  return (
+    <View style={styles.loginContainer}>
+      <Image source={require('../assets/logo.png')} style={styles.logo} />
       <TextInput
-        placeholder="아이디"
+        placeholder="학번"
         value={username}
         onChangeText={setUsername}
         style={styles.input}
       />
       <View style={styles.passwordContainer}>
         <TextInput
-          placeholder="비밀번호"
+          placeholder="패스워드"
           value={password}
           onChangeText={setPassword}
           secureTextEntry={!showPassword}
           style={styles.passwordInput}
         />
-        {/* 비밀번호 표시/숨기기 버튼 */}
         <TouchableOpacity
           onPress={() => setShowPassword(!showPassword)}
           style={styles.passwordToggle}
@@ -76,45 +98,50 @@ export default function LoginScreen({ navigation }) {
           <Image
             source={
               showPassword
-                ? require('../assets/show-pass.png') // 비밀번호 표시 아이콘
-                : require('../assets/blind-pass.png') // 비밀번호 숨기기 아이콘
+                ? require('../assets/show-pass.png')
+                : require('../assets/blind-pass.png')
             }
             style={styles.toggleIcon}
           />
         </TouchableOpacity>
       </View>
-
-      {/* 에러 메시지 */}
+      <View style={styles.checkboxContainer}>
+        <Checkbox
+          value={rememberMe}
+          onValueChange={setRememberMe}
+          color={rememberMe ? '#1d4ed8' : undefined}
+        />
+        <Text style={styles.checkboxText}>아이디/비밀번호 저장</Text>
+      </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      {/* 로그인 버튼 */}
-      <TouchableOpacity onPress={handleLogin} style={styles.loginButton}>
+      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
         <Text style={styles.loginButtonText}>로그인</Text>
       </TouchableOpacity>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: {
+  loginContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 16,
     backgroundColor: '#f7f9fc',
-    padding: 20,
   },
   logo: {
-    width: 150, // 로고 이미지 너비
-    height: 50, // 로고 이미지 높이
-    marginBottom: 40, // 아래 요소와 간격
+    width: '80%',
+    height: 50,
+    marginBottom: 40,
   },
   input: {
     width: '80%',
-    padding: 10,
+    height: 40,
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 5,
-    marginVertical: 10,
+    paddingHorizontal: 10,
+    marginBottom: 15,
     backgroundColor: '#fff',
   },
   passwordContainer: {
@@ -124,12 +151,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 5,
-    marginVertical: 10,
+    marginBottom: 15,
     backgroundColor: '#fff',
   },
   passwordInput: {
     flex: 1,
-    padding: 10,
+    height: 40,
+    paddingHorizontal: 10,
   },
   passwordToggle: {
     padding: 10,
@@ -138,19 +166,38 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
   },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  checkboxText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+  },
   errorText: {
     color: 'red',
     marginBottom: 20,
   },
   loginButton: {
-    backgroundColor: '#007BFF',
-    padding: 10,
-    borderRadius: 5,
     width: '80%',
+    height: 45,
+    backgroundColor: '#1d4ed8',
+    justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
   },
   loginButtonText: {
     color: '#fff',
+    fontSize: 16,
     fontWeight: 'bold',
   },
 });
+
+export default LoginScreen;

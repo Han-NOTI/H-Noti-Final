@@ -137,7 +137,10 @@ async function loginWithEclass(username, password) {
       const courseDetails = await Promise.all(detailPromises);
 
       // 결과 반환
-      return getUserData(username);
+
+      final_result = getUserData(username);
+      console.log(final_result);
+      return final_result;
     } catch (error) {
       await browser.close();
       console.error('Puppeteer 오류:', error);
