@@ -11,6 +11,7 @@ import Checkbox from 'expo-checkbox';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
+// 로그인 화면
 const LoginScreen = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -40,13 +41,15 @@ const LoginScreen = ({ onLoginSuccess }) => {
         'https://loginwitheclass-bkvxpnghzq-du.a.run.app',
         { username, password }
       );
+      // 서버 응답 전체 출력
+      console.log('Full Response:', response.data);
 
       if (response.data.success) {
         const userAssignments = response.data.data.assignments || [];
         const userLectures = response.data.data.lectures || [];
         const userUsername = response.data.data.username;
-        const userRealName = response.data.data.real_name; // real_name 데이터
-        const userTrackName = response.data.data.track_name; // track_name 데이터
+        const userRealName = response.data.data.real_name;
+        const userTrackName = response.data.data.track_name;
 
         if (rememberMe) {
           await AsyncStorage.setItem('username', username);

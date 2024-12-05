@@ -10,45 +10,75 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
+// 홈 화면
 const HomeScreen = ({ lectures = [], assignments = [] }) => {
   const navigation = useNavigation();
 
-  // 통합된 taskList를 관리하기 위한 상태
   const [taskList, setTaskList] = useState([]);
 
-  // lectures와 assignments 데이터를 통합하여 taskList 생성
-  useEffect(() => {
+  // 남은 시간을 초 단위로 계산하는 함수
+  const calculateRemainingTimeInSeconds = (deadline) => {
+    const currentTime = new Date();
+    let correctedDeadline = deadline;
+
+    // 연도가 누락된 경우 현재 연도를 추가
+    if (correctedDeadline && correctedDeadline.match(/^\d{2}-\d{2}/)) {
+      const currentYear = new Date().getFullYear();
+      correctedDeadline = `${currentYear}-${correctedDeadline}`;
+    }
+
+    // ISO 8601 형식으로 강제 변환
+    if (correctedDeadline && correctedDeadline.includes(' ')) {
+      correctedDeadline = correctedDeadline.replace(' ', 'T') + 'Z';
+    }
+
+    const deadlineTime = new Date(correctedDeadline).getTime();
+
+    if (isNaN(deadlineTime)) {
+      console.error('Invalid date format:', correctedDeadline);
+      return Infinity; // 오류가 있는 경우 무한대로 설정
+    }
+
+    const timeDiff = deadlineTime - currentTime.getTime();
+
+    return timeDiff; // 초 단위로 반환
+  };
+
+  // lectures와 assignments 데이터를 통합하여 taskList 생성 및 정렬
+  const generateTaskList = () => {
+    const flattenedLectures = lectures.flat(); // 중첩 배열 평탄화
+
     const combinedTasks = [
-      ...lectures.map((lecture) => ({
+      ...flattenedLectures.map((lecture) => ({
         ...lecture,
         type: 'lecture',
+        timeRemaining: calculateRemainingTimeInSeconds(lecture.deadline),
       })),
       ...assignments.map((assignment) => ({
         ...assignment,
         type: 'assignment',
+        timeRemaining: calculateRemainingTimeInSeconds(assignment.deadline),
       })),
     ];
-    setTaskList(combinedTasks);
+
+    // 남은 시간을 기준으로 오름차순 정렬
+    combinedTasks.sort((a, b) => a.timeRemaining - b.timeRemaining);
+
+    return combinedTasks;
+  };
+
+  useEffect(() => {
+    setTaskList(generateTaskList()); // 초기 taskList 설정
   }, [lectures, assignments]);
 
-  // 특정 task를 삭제하는 핸들러
+  // 특정 task를 제거하는 함수
   const handleRemoveTask = (task) => {
     setTaskList((prevTaskList) => prevTaskList.filter((item) => item !== task));
   };
 
-  // 새로고침 핸들러
+  // 새로고침 함수: 원본 데이터를 사용해 taskList를 재생성
   const handleRefresh = () => {
-    const refreshedTasks = [
-      ...lectures.map((lecture) => ({
-        ...lecture,
-        type: 'lecture',
-      })),
-      ...assignments.map((assignment) => ({
-        ...assignment,
-        type: 'assignment',
-      })),
-    ];
-    setTaskList(refreshedTasks);
+    setTaskList(generateTaskList()); // 원본 데이터를 기반으로 taskList 재생성
   };
 
   return (
@@ -74,8 +104,8 @@ const HomeScreen = ({ lectures = [], assignments = [] }) => {
           data={taskList}
           renderItem={({ item }) => (
             <TouchableOpacity
-              onPress={() => handleRemoveTask(item)}
               style={styles.taskCard}
+              onPress={() => handleRemoveTask(item)} // 터치 시 task 제거
             >
               {item.type === 'lecture' ? (
                 <>
@@ -86,6 +116,7 @@ const HomeScreen = ({ lectures = [], assignments = [] }) => {
                   <Text style={styles.taskDetails}>
                     강의 길이: {item.lecture_length}
                   </Text>
+                  <Text style={styles.taskDetails}>상태: 결석</Text>
                   <Text style={styles.taskDetails}>
                     마감 기한: {item.deadline}
                   </Text>
@@ -96,11 +127,11 @@ const HomeScreen = ({ lectures = [], assignments = [] }) => {
                   <Text style={styles.taskDetails}>
                     과제 제목: {item.title}
                   </Text>
+                  <Text style={styles.taskDetails}>주차: {item.week}</Text>
+                  <Text style={styles.taskDetails}>상태: {item.status}</Text>
                   <Text style={styles.taskDetails}>
                     마감 기한: {item.deadline}
                   </Text>
-                  <Text style={styles.taskDetails}>상태: {item.status}</Text>
-                  <Text style={styles.taskDetails}>주차: {item.week}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -122,7 +153,12 @@ const HomeScreen = ({ lectures = [], assignments = [] }) => {
           />
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => navigation.navigate('NotificationScreen')}
+          onPress={() =>
+            navigation.navigate('NotificationScreen', {
+              lectures: lectures,
+              assignments: assignments,
+            })
+          }
           style={styles.navButton}
         >
           <Image
@@ -152,27 +188,25 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center', // 중앙 정렬
+    justifyContent: 'center',
     marginBottom: 20,
-    position: 'relative', // 상대 위치 설정
+    position: 'relative',
     paddingTop: 16,
   },
   title: {
     fontSize: 30,
     fontWeight: 'bold',
-    textAlign: 'center', // 텍스트 중앙 정렬
-    flex: 1, // 제목을 화면 중앙에 배치
+    textAlign: 'center',
+    flex: 1,
   },
   refreshButton: {
     position: 'absolute',
-    right: 0, // 오른쪽에 배치
+    right: 0,
     padding: 16,
-    marginTop: 20,
   },
   refreshIcon: {
-    width: 24,
-    height: 24,
-    marginTop: 15,
+    width: 25,
+    height: 25,
   },
   taskList: {
     paddingHorizontal: 16,

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
+// 프로필 화면
 const ProfileScreen = ({ onLogout, username, real_name, track_name }) => {
   const navigation = useNavigation();
   const [selectedTab, setSelectedTab] = useState('profile');
