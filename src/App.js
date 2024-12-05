@@ -7,29 +7,17 @@ import ManualScreen from './ManualScreen';
 import HomeScreen from './HomeScreen';
 import NotificationScreen from './NotificationScreen';
 import ProfileScreen from './ProfileScreen';
-import { Alert } from 'react-native';
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
-// 순환 색상 배열
-const colorPalette = [
-  '#d1e7ff',
-  '#ffd1d1',
-  '#d1ffd1',
-  '#ffe6b3',
-  '#fff3d1',
-  '#f3d1ff',
-  '#f0ffff',
-];
-
 const firebaseConfig = {
-  apiKey: "AIzaSyCAtbItawYDII4FhkNRVX90PGYs5OyG2nw",
-  authDomain: "hannoti-50b2b.firebaseapp.com",
-  projectId: "hannoti-50b2b",
-  storageBucket: "hannoti-50b2b.firebasestorage.app",
-  messagingSenderId: "563915267715",
-  appId: "1:563915267715:web:93dc752cb86d7cab4a05b6",
-  measurementId: "G-7CSDGXXJY9"
+  apiKey: 'AIzaSyCAtbItawYDII4FhkNRVX90PGYs5OyG2nw',
+  authDomain: 'hannoti-50b2b.firebaseapp.com',
+  projectId: 'hannoti-50b2b',
+  storageBucket: 'hannoti-50b2b.firebasestorage.app',
+  messagingSenderId: '563915267715',
+  appId: '1:563915267715:web:93dc752cb86d7cab4a05b6',
+  measurementId: 'G-7CSDGXXJY9',
 };
 
 const Stack = createStackNavigator();
@@ -38,10 +26,14 @@ export default function App() {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
 
-
   const [loaded, setLoaded] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [showManual, setShowManual] = useState(true);
+  const [assignments, setAssignments] = useState([]);
+  const [lectures, setLectures] = useState([]);
+  const [username, setUsername] = useState('');
+  const [realName, setRealName] = useState('');
+  const [trackName, setTrackName] = useState('');
 
   if (!loaded) {
     return <SplashScreen onLoaded={() => setLoaded(true)} />;
@@ -50,8 +42,19 @@ export default function App() {
   if (!loggedIn) {
     return (
       <LoginScreen
-        onLoginSuccess={() => {
+        onLoginSuccess={(
+          userAssignments,
+          userLectures,
+          userUsername,
+          userRealName,
+          userTrackName
+        ) => {
           setLoggedIn(true);
+          setAssignments(userAssignments);
+          setLectures(userLectures);
+          setUsername(userUsername);
+          setRealName(userRealName);
+          setTrackName(userTrackName);
         }}
       />
     );
@@ -72,10 +75,8 @@ export default function App() {
           {(props) => (
             <HomeScreen
               {...props}
-              subjects={initialSubjects}
-              onSubjectClick={(subject) =>
-                Alert.alert(`선택된 과목: ${subject.title}`, subject.details)
-              }
+              lectures={lectures}
+              assignments={assignments}
             />
           )}
         </Stack.Screen>
@@ -85,7 +86,15 @@ export default function App() {
           options={{ headerShown: false }}
         />
         <Stack.Screen name="ProfileScreen" options={{ headerShown: false }}>
-          {(props) => <ProfileScreen {...props} onLogout={handleLogout} />}
+          {(props) => (
+            <ProfileScreen
+              {...props}
+              username={username}
+              real_name={realName}
+              track_name={trackName}
+              onLogout={handleLogout}
+            />
+          )}
         </Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>

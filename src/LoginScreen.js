@@ -5,21 +5,11 @@ import {
   Text,
   Image,
   StyleSheet,
-  TouchableOpacity
+  TouchableOpacity,
 } from 'react-native';
 import Checkbox from 'expo-checkbox';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios'; // Import Axios for HTTP requests
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCAtbItawYDII4FhkNRVX90PGYs5OyG2nw",
-  authDomain: "hannoti-50b2b.firebaseapp.com",
-  projectId: "hannoti-50b2b",
-  storageBucket: "hannoti-50b2b.firebasestorage.app",
-  messagingSenderId: "563915267715",
-  appId: "1:563915267715:web:93dc752cb86d7cab4a05b6",
-  measurementId: "G-7CSDGXXJY9"
-};
+import axios from 'axios';
 
 const LoginScreen = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
@@ -27,8 +17,8 @@ const LoginScreen = ({ onLoginSuccess }) => {
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false); // Add loading state
 
-  // Load login data from AsyncStorage
   useEffect(() => {
     const loadLoginData = async () => {
       const savedUsername = await AsyncStorage.getItem('username');
@@ -43,15 +33,21 @@ const LoginScreen = ({ onLoginSuccess }) => {
     loadLoginData();
   }, []);
 
-  // Handle login
   const handleLogin = async () => {
+    setLoading(true);
     try {
-      // Firebase Cloud Functions endpoint 호출
-      const response = await axios.post('https://loginwitheclass-bkvxpnghzq-du.a.run.app', { username, password });
-      console.log("실행결과:", response.data)
-
+      const response = await axios.post(
+        'https://loginwitheclass-bkvxpnghzq-du.a.run.app',
+        { username, password }
+      );
 
       if (response.data.success) {
+        const userAssignments = response.data.data.assignments || [];
+        const userLectures = response.data.data.lectures || [];
+        const userUsername = response.data.data.username;
+        const userRealName = response.data.data.real_name; // real_name 데이터
+        const userTrackName = response.data.data.track_name; // track_name 데이터
+
         if (rememberMe) {
           await AsyncStorage.setItem('username', username);
           await AsyncStorage.setItem('password', password);
@@ -61,18 +57,26 @@ const LoginScreen = ({ onLoginSuccess }) => {
           await AsyncStorage.removeItem('password');
           await AsyncStorage.setItem('rememberMe', 'false');
         }
-        onLoginSuccess();
+
+        onLoginSuccess(
+          userAssignments,
+          userLectures,
+          userUsername,
+          userRealName,
+          userTrackName
+        );
       } else {
-        setError(response.data.message || 'Unexpected error occurred. Please try again.');
+        setError(response.data.message || '로그인 실패. 다시 시도해주세요.');
         setPassword('');
       }
     } catch (error) {
-      console.log(error);
-      setError('Unexpected error occurred. Please try again.');
+      console.error('Login Error:', error);
+      setError('네트워크 오류가 발생했습니다. 다시 시도해주세요.');
       setPassword('');
+    } finally {
+      setLoading(false);
     }
   };
-
 
   return (
     <View style={styles.loginContainer}>
@@ -82,6 +86,7 @@ const LoginScreen = ({ onLoginSuccess }) => {
         value={username}
         onChangeText={setUsername}
         style={styles.input}
+        autoCapitalize="none"
       />
       <View style={styles.passwordContainer}>
         <TextInput
@@ -90,6 +95,7 @@ const LoginScreen = ({ onLoginSuccess }) => {
           onChangeText={setPassword}
           secureTextEntry={!showPassword}
           style={styles.passwordInput}
+          autoCapitalize="none"
         />
         <TouchableOpacity
           onPress={() => setShowPassword(!showPassword)}
@@ -114,8 +120,15 @@ const LoginScreen = ({ onLoginSuccess }) => {
         <Text style={styles.checkboxText}>아이디/비밀번호 저장</Text>
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-        <Text style={styles.loginButtonText}>로그인</Text>
+      <TouchableOpacity
+        style={[styles.loginButton, loading && styles.loginButtonLoading]} // Apply additional style when loading
+        onPress={handleLogin}
+        disabled={loading} // Disable button while loading
+      >
+        <Text style={styles.loginButtonText}>
+          {loading ? '강의 정보 불러오는 중...' : '로그인'}{' '}
+          {/* Change button text while loading */}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -133,6 +146,7 @@ const styles = StyleSheet.create({
     width: '80%',
     height: 50,
     marginBottom: 40,
+    resizeMode: 'contain',
   },
   input: {
     width: '80%',
@@ -165,6 +179,7 @@ const styles = StyleSheet.create({
   toggleIcon: {
     width: 20,
     height: 20,
+    resizeMode: 'contain',
   },
   checkboxContainer: {
     flexDirection: 'row',
@@ -197,6 +212,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  loginButtonLoading: {
+    backgroundColor: '#ccc', // Gray background when loading
   },
 });
 
