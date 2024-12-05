@@ -1,20 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  FlatList,
   Modal,
   Image,
   SafeAreaView,
-  TouchableOpacity
+  TouchableOpacity,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
-const NotificationScreen = () => {
+const NotificationScreen = ({ route }) => {
+  const { assignments = [] } = route.params || {}; // Handle missing assignments
+  const [notifications, setNotifications] = useState([]);
   const [selectedTab, setSelectedTab] = useState('alarm');
   const [modalVisible, setModalVisible] = useState(false);
   const navigation = useNavigation();
 
+  // Function to calculate remaining time
+  const calculateRemainingTime = (deadline) => {
+    const currentTime = new Date();
+    const deadlineTime = new Date(deadline);
+    const timeDiff = deadlineTime - currentTime;
+    const minutesRemaining = Math.floor(timeDiff / (1000 * 60));
+
+    // Calculate days, hours, and minutes for better precision
+    const days = Math.floor(minutesRemaining / (24 * 60));
+    const hours = Math.floor((minutesRemaining % (24 * 60)) / 60);
+    const minutes = minutesRemaining % 60;
+
+    return { days, hours, minutes, isExpired: timeDiff < 0 }; // Expired check
+  };
+
+  // Function to generate notifications
+  useEffect(() => {
+    const generateNotifications = () => {
+      if (assignments.length === 0) return; // If no assignments, return early
+
+      const newNotifications = assignments.map((assignment, index) => {
+        const taskTitle = assignment.title || 'Unknown Assignment';
+        const videoName = assignment.videoName || 'Unknown Video';
+
+        const taskDeadline = calculateRemainingTime(assignment.deadline);
+        const videoDeadline = calculateRemainingTime(assignment.videoDeadline);
+
+        return {
+          id: assignment.id || `temp-id-${index}`,
+          courseName: assignment.courseName || 'Unknown Course',
+          taskTitle,
+          videoName,
+          taskDeadline,
+          videoDeadline,
+        };
+      });
+
+      setNotifications(newNotifications);
+    };
+
+    generateNotifications();
+  }, [assignments]);
+
+  // Handle navigation tab selection
   const handleTabPress = (tab) => {
     setSelectedTab(tab);
     if (tab === 'home') {
@@ -24,30 +71,91 @@ const NotificationScreen = () => {
     }
   };
 
+  // Function to render video notifications
+  const renderVideoNotification = (item) => (
+    <View style={styles.notificationCard}>
+      <Text style={styles.courseName}>{item.courseName}</Text>
+      {!item.videoDeadline.isExpired && (
+        <Text style={styles.notificationText}>
+          {item.videoName} 시청까지{' '}
+          {item.videoDeadline.days > 0 ? `${item.videoDeadline.days}일 ` : ''}
+          {item.videoDeadline.hours}시간 {item.videoDeadline.minutes}분
+          남았습니다.
+        </Text>
+      )}
+      {item.videoDeadline.isExpired && (
+        <Text style={styles.notificationText}>
+          {item.videoName} 시청 기한이 지났습니다.
+        </Text>
+      )}
+    </View>
+  );
+
+  // Function to render task notifications
+  const renderTaskNotification = (item) => (
+    <View style={styles.notificationCard}>
+      <Text style={styles.courseName}>{item.courseName}</Text>
+      {!item.taskDeadline.isExpired && (
+        <Text style={styles.notificationText}>
+          {item.taskTitle} 과제 제출까지{' '}
+          {item.taskDeadline.days > 0 ? `${item.taskDeadline.days}일 ` : ''}
+          {item.taskDeadline.hours}시간 {item.taskDeadline.minutes}분
+          남았습니다.
+        </Text>
+      )}
+      {item.taskDeadline.isExpired && (
+        <Text style={styles.notificationText}>
+          {item.taskTitle} 과제 제출 기한이 지났습니다.
+        </Text>
+      )}
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.notificationContainer}>
         {/* 상단 헤더 */}
         <View style={styles.header}>
           <Text style={styles.title}>알림 센터</Text>
-          <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.alarmSetButton}>
+          <TouchableOpacity
+            onPress={() => setModalVisible(true)}
+            style={styles.alarmSetButton}
+          >
             <Image
               source={require('../assets/alarm-set.png')} // alarm-set 이미지를 사용
               style={styles.alarmSetIcon}
             />
           </TouchableOpacity>
         </View>
+
         {/* 알림 항목들 */}
-        <View style={styles.notificationItem}>
-          <Text style={styles.notificationText}>
-            웹프레임워크1 영상 시청까지 5시간 남았습니다.
+        {notifications.length === 0 ? (
+          <Text style={styles.noAssignmentsText}>
+            No assignments available.
           </Text>
-        </View>
-        <View style={styles.notificationItem}>
-          <Text style={styles.notificationText}>
-            고급모바일프로그래밍 과제 제출까지 6시간 남았습니다.
-          </Text>
-        </View>
+        ) : (
+          <>
+            {/* Video Notifications Widget */}
+            <Text style={styles.widgetTitle}>영상 시청 알림</Text>
+            <FlatList
+              data={notifications.filter((item) => item.videoDeadline)} // Filter for video notifications
+              keyExtractor={(item) =>
+                item.id?.toString() || item.index.toString()
+              }
+              renderItem={({ item }) => renderVideoNotification(item)}
+            />
+
+            {/* Task Notifications Widget */}
+            <Text style={styles.widgetTitle}>과제 제출 알림</Text>
+            <FlatList
+              data={notifications.filter((item) => item.taskDeadline)} // Filter for task notifications
+              keyExtractor={(item) =>
+                item.id?.toString() || item.index.toString()
+              }
+              renderItem={({ item }) => renderTaskNotification(item)}
+            />
+          </>
+        )}
 
         {/* 시간 설정 모달 */}
         <Modal visible={modalVisible} transparent={true}>
@@ -133,41 +241,58 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9f9f9',
   },
   header: {
-    flexDirection: 'row', // 가로 배치
-    justifyContent: 'space-between', // 제목과 버튼을 양쪽 끝에 배치
-    alignItems: 'center', // 세로 중앙 정렬
-    paddingTop: 20, // 상단 여백
-    paddingHorizontal: 16, // 좌우 여백
-    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    position: 'relative',
   },
   title: {
     fontSize: 30,
     fontWeight: 'bold',
-    textAlign: 'center', // 텍스트 중앙 정렬
-    flex: 1, // 제목을 화면 중앙에 배치
+    textAlign: 'center',
+    flex: 1,
   },
   alarmSetButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute',
+    right: 0,
   },
   alarmSetIcon: {
     width: 24,
     height: 24,
   },
-  notificationItem: {
-    padding: 16,
+  widgetTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginVertical: 10,
+  },
+  notificationCard: {
     backgroundColor: '#fff',
+    padding: 16,
+    marginBottom: 12,
     borderRadius: 8,
-    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  courseName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
   },
   notificationText: {
     fontSize: 16,
-    color: '#333',
+    color: '#666',
+    marginTop: 6,
+  },
+  noAssignmentsText: {
+    fontSize: 18,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 20,
   },
   modalContainer: {
     flex: 1,
@@ -176,53 +301,51 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    width: '90%',
     backgroundColor: '#fff',
-    borderRadius: 10,
     padding: 20,
+    borderRadius: 10,
+    width: '80%',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   modalOption: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingVertical: 10,
   },
   modalText: {
     fontSize: 16,
     color: '#333',
   },
   closeButton: {
-    marginTop: 16,
-    alignItems: 'center',
+    marginTop: 15,
+    paddingVertical: 10,
+    backgroundColor: '#007bff',
+    borderRadius: 5,
   },
   closeButtonText: {
-    color: '#1d4ed8',
+    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    textAlign: 'center',
   },
   navigationBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'center',
-    height: 60,
-    borderTopWidth: 3,
-    borderTopColor: '#ddd',
+    paddingVertical: 12,
     backgroundColor: '#fff',
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 35,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   navButton: {
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   navIcon: {
-    width: 70,
+    width: 30,
     height: 30,
   },
 });
