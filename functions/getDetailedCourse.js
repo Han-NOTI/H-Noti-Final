@@ -12,13 +12,14 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-let assignments = [];
 
 // 하드코딩된 현재 주차와 데드라인
 let weekNumber = '14';
 let deadLine = '12-08 23:59:59';
 
 async function getDetailedCourse(browser, courseName, username) {
+  let assignments = [];
+  
   let page;
   try {
     if (courseName.endsWith('NEW')) {

@@ -10,7 +10,7 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 console.log(db);
 
-async function getUserData(username) {
+async function getUserData(username, real_name, track_name) {
     try {
       const userRef = db.collection('users').doc(username);
       const userDoc = await userRef.get();
@@ -44,9 +44,11 @@ async function getUserData(username) {
   
       // 결과 반환
       return {
-        username,
-        assignments,
-        lectures: lecturesArray
+        username: username,
+        assignments: assignments,
+        lectures: lecturesArray,
+        real_name: real_name,
+        track_name: track_name
       };
   
     } catch (error) {

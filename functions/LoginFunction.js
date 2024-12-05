@@ -137,8 +137,7 @@ async function loginWithEclass(username, password) {
       const courseDetails = await Promise.all(detailPromises);
 
       // 결과 반환
-
-      final_result = getUserData(username);
+      final_result = getUserData(username, real_name, track_name);
       console.log(final_result);
       return final_result;
     } catch (error) {
