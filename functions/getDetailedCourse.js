@@ -19,7 +19,6 @@ let deadLine = '12-08 23:59:59';
 
 async function getDetailedCourse(browser, courseName, username) {
   let assignments = [];
-  
   let page;
   try {
     if (courseName.endsWith('NEW')) {
@@ -121,7 +120,7 @@ async function getDetailedCourse(browser, courseName, username) {
   
     /// 첫 번째, 두 번째 추출 이후 DB(firestore)에 저장하는 과정
     // 1. 강의 정보 저장
-    for (const rowHtml of lectures) { 
+     for (const rowHtml of lectures) { 
     
       const $ = cheerio.load(rowHtml); // Cheerio 인스턴스를 생성 
       const $lecture = $('tr', rowHtml); // 직접 로드된 HTML을 선택
@@ -135,9 +134,21 @@ async function getDetailedCourse(browser, courseName, username) {
 
       // Check last td
       const lastTd = $lecture.find('td').last();
-      if (lastTd.text().trim() !== 'X') {
-        console.log('Invalid last td:', lastTd, lastTd.text().trim());
-        continue;
+
+      // 마지막 <td> 요소에 rowspan 속성이 있는지 확인
+      if (lastTd.attr('rowspan') !== undefined) {
+        // 마지막에서 두 번째 <td> 요소 선택
+        const secondLastTd = $lecture.find('td').eq(-2);
+        if(secondLastTd.text().trim() !== 'X') {
+          console.log('마지막에서 두 번째 <td>:', secondLastTd.text());
+          continue;
+        }
+      } else {
+        // rowspan 속성이 없는 경우 기존 작업 수행
+        if (lastTd.text().trim() !== 'X') {
+          console.log('마지막 <td>의 텍스트:', lastTd.text());
+          continue;
+        }
       }
       
       // Extract lecture title and length
@@ -163,6 +174,7 @@ async function getDetailedCourse(browser, courseName, username) {
         console.error('Firestore에 강의 정보 추가 중 오류 발생', error);
       }
     }
+
 
 
     // 2. 과제 정보 저장

@@ -117,7 +117,7 @@ async function loginWithEclass(username, password) {
           user_name: real_name,
           track_name: track_name,
           loginTimestamp: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        });
         
         console.log(`사용자 ${username}이 Firestore에 저장되었습니다.`);
       } catch (dbError) {
@@ -137,6 +137,7 @@ async function loginWithEclass(username, password) {
       const courseDetails = await Promise.all(detailPromises);
 
       // 결과 반환
+
       final_result = getUserData(username, real_name, track_name);
       console.log(final_result);
       return final_result;

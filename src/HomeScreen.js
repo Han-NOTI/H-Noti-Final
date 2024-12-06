@@ -9,81 +9,99 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import axios from 'axios'; // axios import 추가
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // 홈 화면
 const HomeScreen = ({ lectures = [], assignments = [] }) => {
   const navigation = useNavigation();
 
   const [taskList, setTaskList] = useState([]);
-
-  // 남은 시간을 초 단위로 계산하는 함수
+  const [loading, setLoading] = useState(false); // 로딩 상태 추가
+  const [error, setError] = useState(''); // 오류 상태 관리 추가
+  const [lecturesState, setLecturesState] = useState(lectures); // 강의 상태
+  const [assignmentsState, setAssignmentsState] = useState(assignments); // 과제 상태
+  
+  // useEffect 수정 (상태 변경 시 태스크 리스트 자동 업데이트)
+  useEffect(() => {
+    setTaskList(generateTaskList(lecturesState, assignmentsState));
+  }, [lecturesState, assignmentsState]);
+  
   const calculateRemainingTimeInSeconds = (deadline) => {
     const currentTime = new Date();
     let correctedDeadline = deadline;
-
-    // 연도가 누락된 경우 현재 연도를 추가
     if (correctedDeadline && correctedDeadline.match(/^\d{2}-\d{2}/)) {
       const currentYear = new Date().getFullYear();
       correctedDeadline = `${currentYear}-${correctedDeadline}`;
     }
-
-    // ISO 8601 형식으로 강제 변환
     if (correctedDeadline && correctedDeadline.includes(' ')) {
       correctedDeadline = correctedDeadline.replace(' ', 'T') + 'Z';
     }
-
     const deadlineTime = new Date(correctedDeadline).getTime();
-
     if (isNaN(deadlineTime)) {
-      console.error('Invalid date format:', correctedDeadline);
-      return Infinity; // 오류가 있는 경우 무한대로 설정
+      return Infinity;
     }
-
     const timeDiff = deadlineTime - currentTime.getTime();
-
-    return timeDiff; // 초 단위로 반환
+    return timeDiff;
   };
 
-  // lectures와 assignments 데이터를 통합하여 taskList 생성 및 정렬
-  const generateTaskList = () => {
-    const flattenedLectures = lectures.flat(); // 중첩 배열 평탄화
-
+  // generateTaskList 수정
+  const generateTaskList = (lecturesData, assignmentsData) => {
+    const flattenedLectures = lecturesData.flat();
     const combinedTasks = [
       ...flattenedLectures.map((lecture) => ({
         ...lecture,
         type: 'lecture',
         timeRemaining: calculateRemainingTimeInSeconds(lecture.deadline),
       })),
-      ...assignments.map((assignment) => ({
+      ...assignmentsData.map((assignment) => ({
         ...assignment,
         type: 'assignment',
         timeRemaining: calculateRemainingTimeInSeconds(assignment.deadline),
       })),
     ];
-
-    // 남은 시간을 기준으로 오름차순 정렬
     combinedTasks.sort((a, b) => a.timeRemaining - b.timeRemaining);
-
     return combinedTasks;
   };
 
-  useEffect(() => {
-    setTaskList(generateTaskList()); // 초기 taskList 설정
-  }, [lectures, assignments]);
 
-  // 특정 task를 제거하는 함수
   const handleRemoveTask = (task) => {
     setTaskList((prevTaskList) => prevTaskList.filter((item) => item !== task));
   };
 
-  // 새로고침 함수: 원본 데이터를 사용해 taskList를 재생성
-  const handleRefresh = () => {
-    setTaskList(generateTaskList()); // 원본 데이터를 기반으로 taskList 재생성
+  // 새로고침 함수: API를 호출하여 데이터 갱신
+  const handleRefresh = async () => {
+    setLoading(true);
+    setError('');
+    const username = await AsyncStorage.getItem('username');
+    const password = await AsyncStorage.getItem('password');
+    try {
+      const response = await axios.post(
+        'https://loginwitheclass-bkvxpnghzq-du.a.run.app',
+        { username, password }
+      );
+      if (response.data.success) {
+        const userLectures = response.data.data.lectures || [];
+        const userAssignments = response.data.data.assignments || [];
+  
+        // 상태 갱신
+        setLecturesState(userLectures);
+        setAssignmentsState(userAssignments);
+  
+        // 새로운 태스크 리스트 생성
+        setTaskList(generateTaskList(userLectures, userAssignments));
+      } else {
+        setError(response.data.message || '데이터 갱신 실패. 다시 시도해주세요.');
+      }
+    } catch (error) {
+      setError('네트워크 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Schedule</Text>
         <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
@@ -94,8 +112,11 @@ const HomeScreen = ({ lectures = [], assignments = [] }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Task List */}
-      {taskList.length === 0 ? (
+      {loading ? (
+        <Text style={styles.loadingText}>불러오는 중...</Text>
+      ) : error ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : taskList.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>현재 처리할 할 일이 없습니다.</Text>
         </View>
@@ -105,7 +126,7 @@ const HomeScreen = ({ lectures = [], assignments = [] }) => {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.taskCard}
-              onPress={() => handleRemoveTask(item)} // 터치 시 task 제거
+              onPress={() => handleRemoveTask(item)}
             >
               {item.type === 'lecture' ? (
                 <>
@@ -116,8 +137,8 @@ const HomeScreen = ({ lectures = [], assignments = [] }) => {
                   <Text style={styles.taskDetails}>
                     강의 길이: {item.lecture_length}
                   </Text>
-                  <Text style={styles.taskDetails}>상태: 결석</Text>
-                  <Text style={styles.taskDetails}>
+                  <Text style={styles.taskStatus}>상태: 결석</Text>
+                  <Text style={styles.taskDeadLine}>
                     마감 기한: {item.deadline}
                   </Text>
                 </>
@@ -128,8 +149,8 @@ const HomeScreen = ({ lectures = [], assignments = [] }) => {
                     과제 제목: {item.title}
                   </Text>
                   <Text style={styles.taskDetails}>주차: {item.week}</Text>
-                  <Text style={styles.taskDetails}>상태: {item.status}</Text>
-                  <Text style={styles.taskDetails}>
+                  <Text style={styles.taskStatus}>상태: {item.status}</Text>
+                  <Text style={styles.taskDeadLine}>
                     마감 기한: {item.deadline}
                   </Text>
                 </>
@@ -141,7 +162,6 @@ const HomeScreen = ({ lectures = [], assignments = [] }) => {
         />
       )}
 
-      {/* Navigation Bar */}
       <View style={styles.navigationBar}>
         <TouchableOpacity
           onPress={() => navigation.navigate('HomeScreen')}
@@ -232,7 +252,17 @@ const styles = StyleSheet.create({
   taskDetails: {
     fontSize: 14,
     color: '#666',
+    marginBottom: 8,
+  },
+  taskDeadLine: {
+    fontSize: 14,
+    color: 'blue',
     marginBottom: 4,
+  },
+  taskStatus: {
+    fontSize: 14,
+    color: 'red',
+    marginBottom: 8,
   },
   emptyContainer: {
     flex: 1,
@@ -243,7 +273,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#999',
   },
+  errorText: {
+    fontSize: 16,
+    color: 'black',
+    marginBottom: 20,
+    textAlign: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 20,
+    color: 'black',
+    textAlign: 'center',
+    marginTop: 320,
+  },
   navigationBar: {
+    position: 'absolute', // 위치를 고정
+    bottom: 0, // 화면 하단에 고정
+    width: '100%', // 화면 너비 전체 사용
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
