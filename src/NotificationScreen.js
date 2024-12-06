@@ -11,17 +11,16 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
-import { RadioButton } from 'react-native-paper'; // react-native-paper에서 RadioButton 사용
-import PushNotification from 'react-native-push-notification';
-
-// notificationId를 사용하여 중복 알림을 방지
-let notificationId = 0;
+import { RadioButton } from 'react-native-paper';
 
 const NotificationScreen = ({ lectures = [], assignments = [] }) => {
   const navigation = useNavigation();
   const [taskList, setTaskList] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedTime, setSelectedTime] = useState('3일 전');
+  const [selectedTime, setSelectedTime] = useState('3일 전'); // Default time is 3 days before
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [scheduledNotifications, setScheduledNotifications] = useState([]);
+
 
   const sendNotification = async (task) => {
     try {
@@ -29,52 +28,58 @@ const NotificationScreen = ({ lectures = [], assignments = [] }) => {
         task.type === 'lecture'
           ? `강의 - ${task.courseName}`
           : `과제 - ${task.courseName}`;
-
+  
       const message =
         task.type === 'lecture'
-          ? `${task.lecture_title} 시청까지 ${calculateRemainingTime(
-              task.deadline
-            )}`
-          : `${task.title} 제출까지 ${calculateRemainingTime(task.deadline)}`;
-
+          ? `${task.lecture_title} 시청까지 ${selectedTime}으로 예약 알림하였습니다.`
+          : `${task.title} 제출까지 ${selectedTime}으로 예약 알림하였습니다.`;
+  
       const deadlineTime = new Date(task.deadline).getTime();
-      const timeRemaining = deadlineTime - Date.now();
-
       const notificationTime = calculateTimeBeforeNotification(selectedTime);
-
-      if (timeRemaining < notificationTime) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: title,
-            body: message,
-          },
-          trigger: {
-            date: new Date(deadlineTime - notificationTime),
-          },
-        });
+      const scheduledTime = new Date(deadlineTime - notificationTime); // Calculate the actual scheduled time
+  
+      // Check if enough time is remaining to schedule a notification
+      if (deadlineTime - Date.now() > notificationTime) {
+        const newNotificationId = `${task.type}-${task.courseName}-${task.deadline}`;
+  
+        // Only schedule if the notification is not already scheduled
+        if (!scheduledNotifications.includes(newNotificationId)) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: title,
+              body: message,
+            },
+            trigger: {
+              date: scheduledTime,
+            },
+          });
+  
+          console.log(
+            `${task.type === 'lecture' ? task.lecture_title : task.title} 알림 예약 완료. 예약 시간: ${scheduledTime.toLocaleString()}`
+          );
+          setNotificationMessage(
+            `${task.type === 'lecture' ? task.lecture_title : task.title} 알림 예약 완료`
+          );
+  
+          // Add to the list of scheduled notifications
+          setScheduledNotifications([...scheduledNotifications, newNotificationId]);
+        }
       } else {
-        console.log('알림 예약 시간이 아직 충분히 남았습니다.');
+        console.log('예약할 수 없습니다. 데드라인이 오늘보다 빠릅니다.');
+        setNotificationMessage('예약할 수 없습니다. 데드라인이 오늘보다 빠릅니다.');
       }
     } catch (error) {
       console.error('Notification scheduling error:', error);
     }
   };
-  
+
   const scheduleNotificationsForTasks = () => {
-    const notificationTime = calculateTimeBeforeNotification(selectedTime);
-
     taskList.forEach((task) => {
-      const timeRemaining = calculateRemainingTimeInSeconds(task.deadline);
-
-      if (timeRemaining <= notificationTime) {
-        sendNotification(task);
-      }
+      sendNotification(task);
     });
   };
-  
-  
 
-  // 알림 예약 시 선택된 시간에 따라 미리 알림 시간 계산
+  // Calculate the time difference (in milliseconds) for the notification before the deadline
   const calculateTimeBeforeNotification = (time) => {
     switch (time) {
       case '3시간 전':
@@ -93,7 +98,7 @@ const NotificationScreen = ({ lectures = [], assignments = [] }) => {
   };
 
   useEffect(() => {
-    // taskList가 변경될 때마다 알림을 다시 예약
+    // Call scheduleNotificationsForTasks when taskList or selectedTime changes
     scheduleNotificationsForTasks();
   }, [selectedTime, taskList]);
 
@@ -110,102 +115,80 @@ const NotificationScreen = ({ lectures = [], assignments = [] }) => {
       })),
     ];
 
-
-    // 남은 시간을 계산하고 이를 기준으로 정렬 (시간이 적게 남은 것부터)
+    // Add remaining time calculation
     const tasksWithTimeDiff = combinedTasks.map((task) => {
       const timeRemaining = calculateRemainingTimeInSeconds(task.deadline);
       return { ...task, timeRemaining };
     });
 
-    // timeRemaining 기준으로 오름차순 정렬
     tasksWithTimeDiff.sort((a, b) => a.timeRemaining - b.timeRemaining);
 
     setTaskList(tasksWithTimeDiff);
   }, [lectures, assignments]);
 
-  // calculateRemainingTimeInSeconds: 남은 시간을 초 단위로 계산하여 반환
   const calculateRemainingTimeInSeconds = (deadline) => {
     const currentTime = new Date();
-  
     let correctedDeadline = deadline;
-  
-    // 연도가 누락된 경우 현재 연도를 추가
+
     if (correctedDeadline && correctedDeadline.match(/^\d{2}-\d{2}/)) {
       const currentYear = new Date().getFullYear();
-      correctedDeadline = `${currentYear}-${correctedDeadline}`; // 'MM-DD HH:mm:ss' → 'YYYY-MM-DD HH:mm:ss'
+      correctedDeadline = `${currentYear}-${correctedDeadline}`;
     }
-  
-    // ISO 8601 형식으로 변환하여 시간대를 로컬로 맞추기
+
     if (correctedDeadline && correctedDeadline.includes(' ')) {
-      correctedDeadline = correctedDeadline.replace(' ', 'T'); // 'MM-DD HH:mm:ss' → 'YYYY-MM-DDTHH:mm:ss'
+      correctedDeadline = correctedDeadline.replace(' ', 'T');
     }
-  
-    // 날짜가 유효한지 체크
+
     const deadlineTime = new Date(correctedDeadline).getTime();
-  
+
     if (isNaN(deadlineTime)) {
       console.error('Invalid date format detected:', correctedDeadline);
-      return 0; // 잘못된 날짜는 0 반환
+      return 0;
     }
-  
+
     const timeDiff = deadlineTime - currentTime.getTime();
-    return timeDiff > 0 ? timeDiff : 0; // 마감시간이 지났으면 0 반환
+    return timeDiff > 0 ? timeDiff : 0;
   };
-  
-  
-  
+
   const calculateRemainingTime = (deadline) => {
     const timeDiff = calculateRemainingTimeInSeconds(deadline);
-  
-    const daysRemaining = Math.floor(timeDiff / (1000 * 60 * 60 * 24)); // 하루 단위로 남은 시간 계산
-    const hoursRemaining = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)); // 남은 시간 내에서 시간 단위 계산
-    const minutesRemaining = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60)); // 남은 시간 내에서 분 단위 계산
-  
+    const daysRemaining = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+    const hoursRemaining = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutesRemaining = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+
     if (timeDiff > 0) {
       if (daysRemaining > 0) {
-        return `${daysRemaining}일 ${hoursRemaining}시간 ${minutesRemaining}분 남았습니다.`; // 1일 이상의 차이가 있을 때
+        return `${daysRemaining}일 ${hoursRemaining}시간 ${minutesRemaining}분 남았습니다.`;
       } else {
-        return `${hoursRemaining}시간 ${minutesRemaining}분 남았습니다.`; // 하루 이하의 차이가 있을 때
+        return `${hoursRemaining}시간 ${minutesRemaining}분 남았습니다.`;
       }
     } else {
-      return `기한이 지났습니다.`; // 마감 시간이 지난 경우
+      return `기한이 지났습니다.`;
     }
   };
-  
-  
 
   const handleAlarmButtonPress = () => {
-    setModalVisible(true); // 알람 설정 모달 열기
+    setModalVisible(true);
   };
 
   const handleCloseModal = () => {
-    setModalVisible(false); // 모달 닫기
+    setModalVisible(false);
   };
 
   const handleTimeSelection = (time) => {
-    setSelectedTime(time); // 선택한 시간 상태 업데이트
-    setModalVisible(false); // 모달 닫기
+    setSelectedTime(time);
+    setModalVisible(false);
   };
-  
-  
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <Text style={styles.title}>알림</Text>
-        {/* 알람 설정 버튼 추가 */}
-        <TouchableOpacity
-          onPress={handleAlarmButtonPress}
-          style={styles.alarmSetButton}
-        >
-          <Image
-            source={require('../assets/alarm-set.png')} // 알람 설정 아이콘 이미지
-            style={styles.alarmSetIcon}
-          />
+        <TouchableOpacity onPress={handleAlarmButtonPress} style={styles.alarmSetButton}>
+          <Image source={require('../assets/alarm-set.png')} style={styles.alarmSetIcon} />
         </TouchableOpacity>
       </View>
 
-      {/* Task List */}
       {taskList.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>현재 알림이 없습니다.</Text>
@@ -217,22 +200,16 @@ const NotificationScreen = ({ lectures = [], assignments = [] }) => {
             <View style={styles.notificationCard}>
               {item.type === 'lecture' ? (
                 <>
-                  <Text style={styles.notificationTitle}>
-                    강의 - {item.courseName}
-                  </Text>
+                  <Text style={styles.notificationTitle}>강의 - {item.courseName}</Text>
                   <Text style={styles.notificationDetails}>
-                    {item.lecture_title} 시청까지{' '}
-                    {calculateRemainingTime(item.deadline)}
+                    {item.lecture_title} 시청까지 {calculateRemainingTime(item.deadline)}
                   </Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.notificationTitle}>
-                    과제 - {item.courseName}
-                  </Text>
+                  <Text style={styles.notificationTitle}>과제 - {item.courseName}</Text>
                   <Text style={styles.notificationDetails}>
-                    {item.title} 제출까지{' '}
-                    {calculateRemainingTime(item.deadline)}
+                    {item.title} 제출까지 {calculateRemainingTime(item.deadline)}
                   </Text>
                 </>
               )}
@@ -243,7 +220,6 @@ const NotificationScreen = ({ lectures = [], assignments = [] }) => {
         />
       )}
 
-      {/* 알람 설정 모달 */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -254,11 +230,7 @@ const NotificationScreen = ({ lectures = [], assignments = [] }) => {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>알람 설정</Text>
 
-            {/* 라디오 버튼 그룹 */}
-            <RadioButton.Group
-              onValueChange={handleTimeSelection}
-              value={selectedTime}
-            >
+            <RadioButton.Group onValueChange={handleTimeSelection} value={selectedTime}>
               <RadioButton.Item label="3시간 전" value="3시간 전" />
               <RadioButton.Item label="6시간 전" value="6시간 전" />
               <RadioButton.Item label="12시간 전" value="12시간 전" />
@@ -266,17 +238,12 @@ const NotificationScreen = ({ lectures = [], assignments = [] }) => {
               <RadioButton.Item label="3일 전" value="3일 전" />
             </RadioButton.Group>
 
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={handleCloseModal}
-            >
-              <Text style={styles.closeButtonText}>닫기</Text>
+            <TouchableOpacity onPress={handleCloseModal} style={styles.closeButton}>
+              <Text style={styles.modalCloseText}>닫기</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
-      {/* Navigation Bar */}
       <View style={styles.navigationBar}>
         <TouchableOpacity
           onPress={() => navigation.navigate('HomeScreen')}
@@ -325,6 +292,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center', // 중앙 정렬
     position: 'relative', // 상대 위치 설정
+    top: 10,
     padding: 20,
   },
   title: {
@@ -395,15 +363,19 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     alignItems: 'center',
   },
+
   closeButtonText: {
     color: '#fff',
     fontSize: 16,
   },
   navigationBar: {
+    position: 'absolute', // 위치를 고정
+    bottom: 0, // 화면 하단에 고정
+    width: '100%', // 화면 너비 전체 사용
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 60,
+    height: 80,
     borderTopWidth: 3,
     borderTopColor: '#ddd',
     backgroundColor: '#fff',
@@ -419,5 +391,6 @@ const styles = StyleSheet.create({
     height: 30,
   },
 });
+
 
 export default NotificationScreen;

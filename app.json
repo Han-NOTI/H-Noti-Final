@@ -8,7 +8,12 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.hanNotiNoti.hanNoti"
+      "bundleIdentifier": "com.hanNotiNoti.hanNoti",
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"],
+        "NSUserTrackingUsageDescription": "알림을 제공하기 위해 사용자의 권한이 필요합니다."
+      },
+      "newArchEnabled": true
     },
     "android": {
       "adaptiveIcon": {

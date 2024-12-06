@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 60,
+    height: 80,
     borderTopWidth: 3,
     borderTopColor: '#ddd',
     backgroundColor: '#fff',

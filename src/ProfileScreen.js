@@ -168,17 +168,18 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   navigationBar: {
+    position: 'absolute', // 위치를 고정
+    bottom: 0, // 화면 하단에 고정
+    width: '100%', // 화면 너비 전체 사용
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 60,
+    height: 80,
     borderTopWidth: 3,
     borderTopColor: '#ddd',
     backgroundColor: '#fff',
-    position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 30,
   },
   navButton: {
     justifyContent: 'center',
