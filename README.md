@@ -64,6 +64,8 @@ H-Noti-Final 프로젝트의 초기 설정을 위한 단계별 가이드입니�
 
 9. Expo 서버를 시작합니다.
 
+10. Expo 앱을 실행합니다.
+
     ```bash
     npx expo start
     ```
